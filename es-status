@@ -1,4 +1,4 @@
-#!/bin/bash 
+#!/bin/bash
 #
 # This script is a wrapper of couple curl commands
 # It gathers few information about ES Cluster
@@ -14,22 +14,22 @@ PORT=${2:-9200}
 
 print_help() {
   cat <<- EOT
-         FILE: $PROGNAME
-  
-        USAGE: $PROGNAME [HOST PORT] [--help]
+         FILE: ${PROGNAME}
+
+        USAGE: ${PROGNAME} [HOST PORT] [--help]
 
       OPTIONS: --help        this help
                HOST          host to use - default localhost
                PORT          port to connect to - default 9200
 
-  DESCRIPTION: $PROGNAME shows status and health of a Elasticsearch cluster/node.
-  
-  
-      VERSION: $VERSION
-       AUTHOR: $AUTHOR
+  DESCRIPTION: ${PROGNAME} shows status and health of a Elasticsearch cluster/node.
+
+
+      VERSION: ${VERSION}
+       AUTHOR: ${AUTHOR}
       COMPANY: eNovance
 EOT
-  exit 0 
+  exit 0
 }
 
 colors() {
@@ -64,7 +64,7 @@ function get_other_value {
   curl -s -XGET "http://${HOST}:${PORT}/_cat/nodes?v&h=h,${1}" | grep -i "$(hostname)" | awk '{print $2}'
 }
 
-if [[ $1 == '-h' || $1 == '--help' || $1 == 'help' ]]; then
+if [[ ${1} == '-h' || ${1} == '--help' || ${1} == 'help' ]]; then
   print_help
   exit 0
 fi
@@ -84,18 +84,21 @@ shard_initializing=$(get_health_value 'initializing_shards')
 shard_unassigned=$(get_health_value 'unassigned_shards')
 
 # Update colors depending on state
-if [ "$status" == "green" ]; then
+if [ "${status}" == "green" ]; then
   status=${bold_on}${green_f}Green${reset_c}
   number_of_nodes=${bold_on}${green_f}$(get_health_value 'number_of_nodes')${reset_c}
   ready=${bold_on}${green_f}YES${reset_c}
-elif [ "$status" == "yellow" ]; then
+elif [ "${status}" == "yellow" ]; then
   status=${bold_on}${yellow_f}Yellow${reset_c}
   number_of_nodes=${bold_on}${yellow_f}$(get_health_value 'number_of_nodes')${reset_c}
   ready=${bold_on}${yellow_f}NO${reset_c}
-elif [ "$status" == "red" ]; then
+elif [ "${status}" == "red" ]; then
   status=${bold_on}${red_f}Red${reset_c}
   number_of_nodes=${bold_on}${red_f}$(get_health_value 'number_of_nodes')${reset_c}
   ready=${bold_on}${red_f}NO${reset_c}
+else
+  echo "${PROGNAME}: Couldn't get a status from host '${HOST}' on port ${PORT}"
+  exit 1
 fi
 
 # Get values for shards
@@ -112,28 +115,29 @@ ram_per=$(get_other_value 'rp')
 echo -e "
                     ${gray_f}${bold_on}CLUSTER STATUS${reset_c}
 
-             Cluster name:   $name
-           Cluster status:   $status
-             Cluster size:   $number_of_nodes
-                    Ready:   $ready
+             Cluster name:   ${name}
+           Cluster status:   ${status}
+             Cluster size:   ${number_of_nodes}
+                    Ready:   ${ready}
 
 ${gray_f}--------------------------------------------------------
    ${bold_on}NODE STATUS${bold_off}${reset_c}
 
-                 Heap max:   $heap_max
-          Heap percentage:   $heap_per%
-               Memory max:   $ram_max
-        Memory percentage:   $ram_per%
+                 Heap max:   ${heap_max}
+          Heap percentage:   ${heap_per}%
+               Memory max:   ${ram_max}
+        Memory percentage:   ${ram_per}%
 
 ${gray_f}--------------------------------------------------------
   ${bold_on}SHARD STATUS${bold_off}${reset_c}
 
-         Shard successful:   $shard_successful
-               Shard fail:   $shard_fail
-         Shard relocating:   $shard_relocating
-       Shard initialising:   $shard_initializing
-         Shard unassigned:   $shard_unassigned
-              Shard total:   $shard_total
+         Shard successful:   ${shard_successful}
+               Shard fail:   ${shard_fail}
+         Shard relocating:   ${shard_relocating}
+       Shard initialising:   ${shard_initializing}
+         Shard unassigned:   ${shard_unassigned}
+              Shard total:   ${shard_total}
 "
 
 exit 0
+
