@@ -1,0 +1,139 @@
+#!/bin/bash 
+#
+# This script is a wrapper of couple curl commands
+# It gathers few information about ES Cluster
+# It also gathers information on the current node
+#
+
+AUTHOR="Hugo Rosnet <hugo.rosnet@enovance.com>"
+VERSION=0.1
+PROGNAME="es-status"
+
+HOST=${1:-"localhost"}
+PORT=${2:-9200}
+
+print_help() {
+  cat <<- EOT
+         FILE: $PROGNAME
+  
+        USAGE: $PROGNAME [HOST PORT] [--help]
+
+      OPTIONS: --help        this help
+               HOST          host to use - default localhost
+               PORT          port to connect to - default 9200
+
+  DESCRIPTION: $PROGNAME shows status and health of a Elasticsearch cluster/node.
+  
+  
+      VERSION: $VERSION
+       AUTHOR: $AUTHOR
+      COMPANY: eNovance
+EOT
+  exit 0 
+}
+
+colors() {
+  escape="\033";
+
+  black_f="${escape}[30m"; red_f="${escape}[31m"; green_f="${escape}[32m";
+  yellow_f="${escape}[33m"; blue_f="${escape}[34m"; purple_f="${escape}[35m";
+  cyan_f="${escape}[36m"; white_f="${escape}[37m"; gray_f="${escape}[30m";
+
+  black_b="${escape}[40m"; red_b="${escape}[41m"; green_b="${escape}[42m";
+  yellow_b="${escape}[43m"; blue_b="${escape}[44m"; purple_b="${escape}[45m";
+  cyan_b="${escape}[46m"; white_b="${escape}[47m";
+
+  bold_on="${escape}[1m"; bold_off="${escape}[22m";
+  italic_on="${escape}[3m"; italics_off="${escape}[23m";
+  underline_on="${escape}[4m"; underline_off="${escape}[24m";
+  blink_on="${escape}[5m"; blink_off="${escape}[25m";
+  invert_on="${escape}[7m"; invert_off="${escape}[27m";
+
+  reset_c="${escape}[0m";
+}
+
+function get_health_value {
+  curl -s -XGET "http://${HOST}:${PORT}/_cluster/health?pretty" | grep "${1}" | cut -d ':' -f 2 | sed -e 's/,//g' -e 's/ //g' -e 's/"//g'
+}
+
+function get_shard_value {
+  curl -s -XGET "http://${HOST}:${PORT}/_stats?pretty" | grep "${1}" | cut -d ':' -f 2 | sed -e 's/,//g' -e 's/ //g' -e 's/"//g' | head -n 1
+}
+
+function get_other_value {
+  curl -s -XGET "http://${HOST}:${PORT}/_cat/nodes?v&h=h,${1}" | grep -i "$(hostname)" | awk '{print $2}'
+}
+
+if [[ $1 == '-h' || $1 == '--help' || $1 == 'help' ]]; then
+  print_help
+  exit 0
+fi
+
+if ! nc -vz ${HOST} ${PORT} > /dev/null 2>&1; then
+  echo "${PROGNAME}: Unable to connect to host '${HOST}' on port ${PORT}"
+  exit 1
+fi
+
+colors
+
+# Get main info from health
+name=$(get_health_value 'cpl-search-sup')
+status=$(get_health_value 'status')
+shard_relocating=$(get_health_value 'relocating_shards')
+shard_initializing=$(get_health_value 'initializing_shards')
+shard_unassigned=$(get_health_value 'unassigned_shards')
+
+# Update colors depending on state
+if [ "$status" == "green" ]; then
+  status=${bold_on}${green_f}Green${reset_c}
+  number_of_nodes=${bold_on}${green_f}$(get_health_value 'number_of_nodes')${reset_c}
+  ready=${bold_on}${green_f}YES${reset_c}
+elif [ "$status" == "yellow" ]; then
+  status=${bold_on}${yellow_f}Yellow${reset_c}
+  number_of_nodes=${bold_on}${yellow_f}$(get_health_value 'number_of_nodes')${reset_c}
+  ready=${bold_on}${yellow_f}NO${reset_c}
+elif [ "$status" == "red" ]; then
+  status=${bold_on}${red_f}Red${reset_c}
+  number_of_nodes=${bold_on}${red_f}$(get_health_value 'number_of_nodes')${reset_c}
+  ready=${bold_on}${red_f}NO${reset_c}
+fi
+
+# Get values for shards
+shard_total=$(get_shard_value 'total')
+shard_fail=$(get_shard_value 'failed')
+shard_successful=$(get_shard_value 'successful')
+
+# Get values of disk/heap
+heap_max=$(get_other_value 'hm')
+heap_per=$(get_other_value 'hp')
+ram_max=$(get_other_value 'rm')
+ram_per=$(get_other_value 'rp')
+
+echo -e "
+                    ${gray_f}${bold_on}CLUSTER STATUS${reset_c}
+
+             Cluster name:   $name
+           Cluster status:   $status
+             Cluster size:   $number_of_nodes
+                    Ready:   $ready
+
+${gray_f}--------------------------------------------------------
+   ${bold_on}NODE STATUS${bold_off}${reset_c}
+
+                 Heap max:   $heap_max
+          Heap percentage:   $heap_per%
+               Memory max:   $ram_max
+        Memory percentage:   $ram_per%
+
+${gray_f}--------------------------------------------------------
+  ${bold_on}SHARD STATUS${bold_off}${reset_c}
+
+         Shard successful:   $shard_successful
+               Shard fail:   $shard_fail
+         Shard relocating:   $shard_relocating
+       Shard initialising:   $shard_initializing
+         Shard unassigned:   $shard_unassigned
+              Shard total:   $shard_total
+"
+
+exit 0
